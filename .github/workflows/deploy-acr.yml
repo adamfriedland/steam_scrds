@@ -20,7 +20,7 @@ permissions:
 jobs:
   deploy-and-publish:
     runs-on: ubuntu-latest
-    environment: production
+    environment: Production
     env:
       ACR_NAME: ${{ secrets.ACR_NAME }}
       AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
