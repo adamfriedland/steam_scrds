@@ -25,7 +25,6 @@ jobs:
       ACR_NAME: ${{ secrets.ACR_NAME }}
       AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
       AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-      AZURE_CLIENT_OBJECT_ID: ${{ secrets.AZURE_CLIENT_OBJECT_ID }}
       RCON_PASSWORD: ${{ secrets.RCON_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +36,6 @@ jobs:
           test -n "$AZURE_LOCATION" || { echo "::error::Set the AZURE_LOCATION GitHub secret."; exit 1; }
           test -n "$AZURE_RESOURCE_GROUP" || { echo "::error::Set the AZURE_RESOURCE_GROUP GitHub secret."; exit 1; }
           test -n "$RCON_PASSWORD" || { echo "::error::Set the RCON_PASSWORD GitHub secret."; exit 1; }
-          test -n "$AZURE_CLIENT_OBJECT_ID" || { echo "::error::Set the AZURE_CLIENT_OBJECT_ID GitHub secret (Object ID of the AZURE_CLIENT_ID service principal, needed to grant AcrPush)."; exit 1; }
 
       - name: Authenticate to Azure
         uses: azure/login@v2
@@ -60,8 +58,7 @@ jobs:
                 registrySku="${{ vars.ACR_SKU || 'Basic' }}" \
                 publicNetworkAccess="${{ vars.ACR_PUBLIC_NETWORK_ACCESS || 'Enabled' }}" \
                 zoneRedundancy="${{ vars.ACR_ZONE_REDUNDANCY || 'Disabled' }}" \
-                dataEndpointEnabled="${{ vars.ACR_DATA_ENDPOINT_ENABLED || 'false' }}" \
-                acrPushPrincipalId="${{ secrets.AZURE_CLIENT_OBJECT_ID }}"
+                dataEndpointEnabled="${{ vars.ACR_DATA_ENDPOINT_ENABLED || 'false' }}"
 
       - name: Build and publish image
         uses: azure/cli@v2
