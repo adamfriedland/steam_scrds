@@ -54,7 +54,7 @@ COPY cfg/server.cfg /home/steam/hl2dm/hl2mp/cfg/server.cfg
 ARG RCON_PASSWORD
 RUN test -n "$RCON_PASSWORD" && \
     case "$RCON_PASSWORD" in \
-        *[A-Za-z0-9_.-]*) echo "RCON_PASSWORD contains unsupported characters" >&2; exit 1 ;; \
+        *[!A-Za-z0-9_.!-]*) echo "RCON_PASSWORD contains unsupported characters" >&2; exit 1 ;; \
     esac && \
     sed -i "s/\${RCON_PASSWORD}/$RCON_PASSWORD/g" /home/steam/hl2dm/hl2mp/cfg/server.cfg
 
