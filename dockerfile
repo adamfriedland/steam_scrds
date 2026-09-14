@@ -24,6 +24,8 @@ RUN mkdir steamcmd && \
     tar -xzf steamcmd.tar.gz -C steamcmd && \
     rm steamcmd.tar.gz
 
+RUN ./steamcmd/steamcmd.sh +quit
+
 RUN ./steamcmd/steamcmd.sh \
       +force_install_dir /home/steam/hl2dm \
       +login anonymous \
