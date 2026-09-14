@@ -61,7 +61,7 @@ jobs:
                 publicNetworkAccess="${{ vars.ACR_PUBLIC_NETWORK_ACCESS || 'Enabled' }}" \
                 zoneRedundancy="${{ vars.ACR_ZONE_REDUNDANCY || 'Disabled' }}" \
                 dataEndpointEnabled="${{ vars.ACR_DATA_ENDPOINT_ENABLED || 'false' }}" \
-                managedIdentityPrincipalId="${{ secrets.AZURE_CLIENT_OBJECT_ID }}"
+                acrPushPrincipalId="${{ secrets.AZURE_CLIENT_OBJECT_ID }}"
 
       - name: Build and publish image
         uses: azure/cli@v2
