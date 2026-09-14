@@ -67,6 +67,7 @@ jobs:
             az acr build \
               --registry "$ACR_NAME" \
               --file dockerfile \
+              --source-acr-auth-id "[caller]" \
               --secret-build-arg "RCON_PASSWORD=$RCON_PASSWORD" \
               --image "steam-scrds:${{ github.sha }}" \
               --image steam-scrds:latest \
