@@ -25,6 +25,9 @@ param zoneRedundancy string = 'Disabled'
 
 param dataEndpointEnabled bool = false
 
+@description('Object ID of the principal managed identity that should be granted to access to build and push images.')
+param managedIdentityPrincipalId string
+
 param tags object = {}
 
 resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
@@ -38,6 +41,18 @@ resource registry 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
     dataEndpointEnabled: dataEndpointEnabled
     publicNetworkAccess: publicNetworkAccess
     zoneRedundancy: zoneRedundancy
+  }
+}
+
+var containerWriterRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2a1e307c-b015-4ebd-883e-5b7698a07328')
+
+resource acrPushRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(managedIdentityPrincipalId)) {
+  name: guid(registry.id, managedIdentityPrincipalId, containerWriterRoleDefinitionId)
+  scope: registry
+  properties: {
+    roleDefinitionId: containerWriterRoleDefinitionId
+    principalId: managedIdentityPrincipalId
+    principalType: 'ServicePrincipal'
   }
 }
 
