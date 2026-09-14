@@ -49,6 +49,11 @@ RUN useradd --create-home steam
 
 COPY --from=builder --chown=steam:steam /home/steam/hl2dm /home/steam/hl2dm
 
+COPY --from=builder --chown=steam:steam \
+    /home/steam/steamcmd/linux32/steamclient.so /home/steam/.steam/sdk32/steamclient.so
+COPY --from=builder --chown=steam:steam \
+    /home/steam/steamcmd/linux64/steamclient.so /home/steam/.steam/sdk64/steamclient.so
+
 COPY cfg/server.cfg /home/steam/hl2dm/hl2mp/cfg/server.cfg
 
 ARG RCON_PASSWORD
