@@ -20,6 +20,10 @@ param ports array = [
     port: 27005
     protocol: 'UDP'
   }
+  {
+    port: 27020
+    protocol: 'UDP'
+  }
 ]
 
 var registryCredentials = [
