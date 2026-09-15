@@ -22,6 +22,7 @@ var registryCredentials = [
   {
     server: imageRegistryLoginServer
     username: imageUsername
+    password: ''
   }
 ]
 
