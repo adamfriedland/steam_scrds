@@ -20,6 +20,9 @@ jobs:
       ACR_NAME: ${{ secrets.ACR_NAME }}
       RCON_PASSWORD: ${{ secrets.RCON_PASSWORD }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Validate image build configuration
         shell: bash
         run: |
