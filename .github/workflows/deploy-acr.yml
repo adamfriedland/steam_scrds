@@ -54,11 +54,7 @@ jobs:
               --template-file infra/acr.bicep \
               --parameters \
                 registryName="$ACR_NAME" \
-                location="$AZURE_LOCATION" \
-                registrySku="${{ vars.ACR_SKU || 'Basic' }}" \
-                publicNetworkAccess="${{ vars.ACR_PUBLIC_NETWORK_ACCESS || 'Enabled' }}" \
-                zoneRedundancy="${{ vars.ACR_ZONE_REDUNDANCY || 'Disabled' }}" \
-                dataEndpointEnabled="${{ vars.ACR_DATA_ENDPOINT_ENABLED || 'false' }}"
+                location="$AZURE_LOCATION"
 
       - name: Build and publish image
         uses: azure/cli@v2
@@ -69,6 +65,5 @@ jobs:
               --file dockerfile \
               --source-acr-auth-id "[caller]" \
               --secret-build-arg "RCON_PASSWORD=$RCON_PASSWORD" \
-              --image "steam-scrds:${{ github.sha }}" \
               --image steam-scrds:latest \
               .
