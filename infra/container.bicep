@@ -16,7 +16,7 @@ param ports array = [
     port: 27015
     protocol: 'UDP'
   }
-    {
+  {
     port: 27015
     protocol: 'TCP'
   }
@@ -51,7 +51,7 @@ resource containerGroup 'Microsoft.ContainerInstance/containerGroups@2022-10-01-
               memoryInGB: 2
             }
           }
-          ports: ports
+          ports: map(items(toObject(ports, p => string(p.port))), p => { port: p.value.port })
         }
       }
     ]
