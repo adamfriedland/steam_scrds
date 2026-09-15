@@ -36,7 +36,7 @@ jobs:
           test -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" || { echo "::error::Set the AZURE_SUBSCRIPTION_ID secret."; exit 1; }
           test -n "${{ secrets.AZURE_RESOURCE_GROUP }}" || { echo "::error::Set the AZURE_RESOURCE_GROUP secret."; exit 1; }
           test -n "${{ secrets.ACR_LOGIN_SERVER }}" || { echo "::error::Set the ACR_LOGIN_SERVER secret."; exit 1; }
-          test -n "${{ vars.ACI_MANAGED_IDENTITY_RESOURCE_ID }}" || { echo "::error::Set the ACI_MANAGED_IDENTITY_RESOURCE_ID variable."; exit 1; }
+          test -n "${{ secrets.ACI_MANAGED_IDENTITY_RESOURCE_ID }}" || { echo "::error::Set the ACI_MANAGED_IDENTITY_RESOURCE_ID secret."; exit 1; }
 
       - name: Authenticate to Azure
         uses: azure/login@v2
@@ -57,7 +57,7 @@ jobs:
                 location="${{ vars.AZURE_LOCATION || 'southafricanorth' }}" \
                 imageRegistryLoginServer="${{ secrets.ACR_LOGIN_SERVER }}" \
                 containerName="${{ vars.ACI_CONTAINER_NAME || 'hl2dm' }}" \
-                managedIdentityResourceId="${{ vars.ACI_MANAGED_IDENTITY_RESOURCE_ID }}"
+                managedIdentityResourceId="${{ secrets.ACI_MANAGED_IDENTITY_RESOURCE_ID }}"
 
   deprovision:
     if: github.event.inputs.action == 'deprovision'
