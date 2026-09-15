@@ -7,8 +7,8 @@ param containerName string
 @description('Container registry login server used when imageType is Private.')
 param imageRegistryLoginServer string
 
-@description('Name of the existing user-assigned identity used to pull the image.')
-param managedIdentityName string
+@description('Resource ID of the existing user-assigned identity used to pull the image.')
+param managedIdentityResourceId string
 
 @description('Port mappings for the container group.')
 param ports array = [
@@ -18,14 +18,10 @@ param ports array = [
   }
 ]
 
-resource managedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
-  name: managedIdentityName
-}
-
 var registryCredentials = [
   {
     server: imageRegistryLoginServer
-    identity: managedIdentity.id
+    identity: managedIdentityResourceId
   }
 ]
 
@@ -35,7 +31,7 @@ resource containerGroup 'Microsoft.ContainerInstance/containerGroups@2022-10-01-
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
-      '${managedIdentity.id}': {}
+      '${managedIdentityResourceId}': {}
     }
   }
   zones: []
