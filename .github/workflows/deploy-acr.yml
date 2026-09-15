@@ -20,6 +20,7 @@ permissions:
 jobs:
   whatif:
     runs-on: ubuntu-latest
+    environment: Production
     env:
       ACR_NAME: ${{ secrets.ACR_NAME }}
       AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
