@@ -18,7 +18,45 @@ permissions:
   id-token: write
 
 jobs:
+  whatif:
+    runs-on: ubuntu-latest
+    env:
+      ACR_NAME: ${{ secrets.ACR_NAME }}
+      AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
+      AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+      RCON_PASSWORD: ${{ secrets.RCON_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          test -n "$ACR_NAME" || { echo "::error::Set the ACR_NAME GitHub secret."; exit 1; }
+          test -n "$AZURE_LOCATION" || { echo "::error::Set the AZURE_LOCATION GitHub secret."; exit 1; }
+          test -n "$AZURE_RESOURCE_GROUP" || { echo "::error::Set the AZURE_RESOURCE_GROUP GitHub secret."; exit 1; }
+          test -n "$RCON_PASSWORD" || { echo "::error::Set the RCON_PASSWORD GitHub secret."; exit 1; }
+
+      - name: Authenticate to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: What-if container registry deployment
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az deployment group what-if \
+              --name "acr-${{ github.run_id }}" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --template-file infra/acr.bicep \
+              --parameters \
+                registryName="$ACR_NAME" \
+                location="$AZURE_LOCATION"
+
   deploy-and-publish:
+    needs: whatif
     runs-on: ubuntu-latest
     environment: Production
     env:
