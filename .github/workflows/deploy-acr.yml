@@ -6,10 +6,13 @@ on:
       - master
     paths:
       - '.github/workflows/deploy-acr.yml'
-      - 'cfg/**'
-      - 'entrypoint.sh'
       - 'infra/acr.bicep'
-      - 'maps/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/deploy-acr.yml'
+      - 'infra/acr.bicep'
   workflow_dispatch:
 
 permissions:
@@ -55,6 +58,7 @@ jobs:
 
   deploy:
     needs: whatif
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: Production
     env:

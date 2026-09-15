@@ -1,6 +1,12 @@
 name: Deploy Azure Container Instance
 
 on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/deploy-aci.yml'
+      - 'infra/container.bicep'
   workflow_dispatch:
     inputs:
       action:

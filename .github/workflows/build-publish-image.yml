@@ -7,6 +7,18 @@ on:
     paths:
       - '.github/workflows/build-publish-image.yml'
       - 'dockerfile'
+      - 'cfg/**'
+      - 'entrypoint.sh'
+      - 'maps/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/build-publish-image.yml'
+      - 'dockerfile'
+      - 'cfg/**'
+      - 'entrypoint.sh'
+      - 'maps/**'
   workflow_dispatch:
 
 permissions:
