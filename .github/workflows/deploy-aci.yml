@@ -50,7 +50,7 @@ jobs:
             az deployment group create \
               --name "aci-${{ github.run_id }}" \
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-              --template-file infra/content.bicep \
+              --template-file infra/container.bicep \
               --parameters \
                 location="${{ vars.AZURE_LOCATION || 'southafricanorth' }}" \
                 imageUsername="${{ secrets.ACR_USERNAME }}" \
