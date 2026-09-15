@@ -14,30 +14,10 @@ param managedIdentityResourceId string
 param ports array = [
   {
     port: 27015
-    protocol: 'TCP'
-  }
-  {
-    port: 27036
-    protocol: 'TCP'
-  }
-  {
-    port: 27031
     protocol: 'UDP'
   }
   {
-    port: 27032
-    protocol: 'UDP'
-  }
-  {
-    port: 27033
-    protocol: 'UDP'
-  }
-  {
-    port: 27034
-    protocol: 'UDP'
-  }
-  {
-    port: 27035
+    port: 27005
     protocol: 'UDP'
   }
 ]
