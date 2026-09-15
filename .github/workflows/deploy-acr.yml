@@ -1,4 +1,4 @@
-name: Deploy and Publish Container Image
+name: Deploy Container Registry
 
 on:
   push:
@@ -25,7 +25,6 @@ jobs:
       ACR_NAME: ${{ secrets.ACR_NAME }}
       AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
       AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-      RCON_PASSWORD: ${{ secrets.RCON_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -35,7 +34,6 @@ jobs:
           test -n "$ACR_NAME" || { echo "::error::Set the ACR_NAME GitHub secret."; exit 1; }
           test -n "$AZURE_LOCATION" || { echo "::error::Set the AZURE_LOCATION GitHub secret."; exit 1; }
           test -n "$AZURE_RESOURCE_GROUP" || { echo "::error::Set the AZURE_RESOURCE_GROUP GitHub secret."; exit 1; }
-          test -n "$RCON_PASSWORD" || { echo "::error::Set the RCON_PASSWORD GitHub secret."; exit 1; }
 
       - name: Authenticate to Azure
         uses: azure/login@v2
@@ -56,7 +54,7 @@ jobs:
                 registryName="$ACR_NAME" \
                 location="$AZURE_LOCATION"
 
-  deploy-and-publish:
+  deploy:
     needs: whatif
     runs-on: ubuntu-latest
     environment: Production
@@ -64,7 +62,6 @@ jobs:
       ACR_NAME: ${{ secrets.ACR_NAME }}
       AZURE_LOCATION: ${{ secrets.AZURE_LOCATION }}
       AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
-      RCON_PASSWORD: ${{ secrets.RCON_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,7 +71,6 @@ jobs:
           test -n "$ACR_NAME" || { echo "::error::Set the ACR_NAME GitHub secret."; exit 1; }
           test -n "$AZURE_LOCATION" || { echo "::error::Set the AZURE_LOCATION GitHub secret."; exit 1; }
           test -n "$AZURE_RESOURCE_GROUP" || { echo "::error::Set the AZURE_RESOURCE_GROUP GitHub secret."; exit 1; }
-          test -n "$RCON_PASSWORD" || { echo "::error::Set the RCON_PASSWORD GitHub secret."; exit 1; }
 
       - name: Authenticate to Azure
         uses: azure/login@v2
@@ -94,15 +90,3 @@ jobs:
               --parameters \
                 registryName="$ACR_NAME" \
                 location="$AZURE_LOCATION"
-
-      - name: Build and publish image
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            az acr build \
-              --registry "$ACR_NAME" \
-              --file dockerfile \
-              --source-acr-auth-id "[caller]" \
-              --secret-build-arg "RCON_PASSWORD=$RCON_PASSWORD" \
-              --image steam-scrds:latest \
-              .
