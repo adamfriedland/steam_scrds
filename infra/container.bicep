@@ -14,11 +14,35 @@ param managedIdentityResourceId string
 param ports array = [
   {
     port: 27015
+    protocol: 'TCP'
+  }
+  {
+    port: 27036
+    protocol: 'TCP'
+  }
+  {
+    port: 27031
     protocol: 'UDP'
   }
   {
-    port: 27015
-    protocol: 'TCP'
+    port: 27032
+    protocol: 'UDP'
+  }
+  {
+    port: 27033
+    protocol: 'UDP'
+  }
+  {
+    port: 27034
+    protocol: 'UDP'
+  }
+  {
+    port: 27035
+    protocol: 'UDP'
+  }
+  {
+    port: 27036
+    protocol: 'UDP'
   }
 ]
 
@@ -51,7 +75,7 @@ resource containerGroup 'Microsoft.ContainerInstance/containerGroups@2022-10-01-
               memoryInGB: 2
             }
           }
-          ports: map(items(toObject(ports, p => string(p.port))), p => { port: p.value.port })
+          ports: ports
         }
       }
     ]
