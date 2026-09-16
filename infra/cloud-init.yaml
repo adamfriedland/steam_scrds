@@ -1,0 +1,38 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - ca-certificates
+  - lib32gcc-s1
+  - lib32stdc++6
+  - tar
+  - wget
+
+runcmd:
+  - mkdir -p /opt/steamcmd /home/__ADMIN_USERNAME__/hl2dm
+  - chown -R __ADMIN_USERNAME__:__ADMIN_USERNAME__ /opt/steamcmd /home/__ADMIN_USERNAME__/hl2dm
+  - runuser -u __ADMIN_USERNAME__ -- wget -q https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -O /tmp/steamcmd_linux.tar.gz
+  - tar -xzf /tmp/steamcmd_linux.tar.gz -C /opt/steamcmd
+  - rm -f /tmp/steamcmd_linux.tar.gz
+  - chown -R __ADMIN_USERNAME__:__ADMIN_USERNAME__ /opt/steamcmd
+  - runuser -u __ADMIN_USERNAME__ -- /opt/steamcmd/steamcmd.sh +force_install_dir /home/__ADMIN_USERNAME__/hl2dm +login anonymous +app_update 232370 validate +quit
+  - |
+    cat > /etc/systemd/system/hl2dm.service <<'EOF'
+    [Unit]
+    Description=Half-Life 2 Deathmatch Dedicated Server
+    After=network-online.target
+    Wants=network-online.target
+
+    [Service]
+    User=__ADMIN_USERNAME__
+    WorkingDirectory=/home/__ADMIN_USERNAME__/hl2dm
+    ExecStart=/home/__ADMIN_USERNAME__/hl2dm/srcds_run -game hl2mp +map dm_resistance +maxplayers 16 -port 27015
+    Restart=on-failure
+    RestartSec=10
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+  - chown -R __ADMIN_USERNAME__:__ADMIN_USERNAME__ /home/__ADMIN_USERNAME__/hl2dm
+  - systemctl daemon-reload
+  - systemctl enable --now hl2dm.service

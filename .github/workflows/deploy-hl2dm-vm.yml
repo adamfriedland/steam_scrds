@@ -1,0 +1,173 @@
+name: Deploy HL2DM Standalone VM
+
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - '.github/workflows/deploy-hl2dm-vm.yml'
+      - 'infra/hl2dm-vm.bicep'
+      - 'infra/hl2dm-vm.bicepparam'
+      - 'infra/hl2dm-cloud-init.yaml'
+      - 'infra/cloud-init.yaml'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Select the operation to run
+        required: true
+        type: choice
+        options:
+          - provision
+          - deprovision
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: hl2dm-vm-manual-approval
+  cancel-in-progress: false
+
+jobs:
+  provision:
+    if: github.event.inputs.action == 'provision'
+    runs-on: ubuntu-latest
+    environment: production_srcds
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required settings
+        shell: bash
+        run: |
+          test -n "${{ secrets.AZURE_CLIENT_ID }}" || { echo "::error::Set the AZURE_CLIENT_ID secret."; exit 1; }
+          test -n "${{ secrets.AZURE_TENANT_ID }}" || { echo "::error::Set the AZURE_TENANT_ID secret."; exit 1; }
+          test -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" || { echo "::error::Set the AZURE_SUBSCRIPTION_ID secret."; exit 1; }
+          test -n "${{ secrets.AZURE_RESOURCE_GROUP }}" || { echo "::error::Set the AZURE_RESOURCE_GROUP secret."; exit 1; }
+          test -n "${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}" || { echo "::error::Set the AZURE_VM_SSH_PUBLIC_KEY secret."; exit 1; }
+          test -n "${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}" || { echo "::error::Set the AZURE_SSH_SOURCE_ADDRESS_PREFIX secret."; exit 1; }
+          test -n "${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}" || { echo "::error::Set the AZURE_VM_SSH_PRIVATE_KEY secret."; exit 1; }
+          test -n "${{ secrets.ADMIN_USERNAME }}" || { echo "::error::Set the ADMIN_USERNAME secret."; exit 1; }
+
+      - name: Authenticate to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision HL2DM VM
+        id: deploy
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az deployment group create \
+              --name "hl2dm-vm-${{ github.run_id }}" \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+              --template-file infra/hl2dm-vm.bicep \
+              --parameters infra/hl2dm-vm.bicepparam \
+              --parameters \
+                location="${{ vars.AZURE_LOCATION || 'southafricanorth' }}" \
+                adminUsername="${{ secrets.ADMIN_USERNAME }}" \
+                adminSshPublicKey="${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}" \
+                sshSourceAddressPrefix="${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}"
+
+            PUBLIC_IP=$(az deployment group show \
+              --name "hl2dm-vm-${{ github.run_id }}" \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+              --query properties.outputs.publicIpAddress.value -o tsv)
+
+            echo "public_ip=$PUBLIC_IP" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for SSH and cloud-init to finish
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
+          PUBLIC_IP: ${{ steps.deploy.outputs.public_ip }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/hl2dm_vm_key
+          chmod 600 ~/.ssh/hl2dm_vm_key
+
+          SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hl2dm_vm_key"
+
+          echo "Waiting for SSH on $PUBLIC_IP..."
+          for i in $(seq 1 30); do
+            if ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "echo ready" >/dev/null 2>&1; then
+              echo "SSH is up."
+              break
+            fi
+            echo "Attempt $i/30 failed, retrying in 10s..."
+            sleep 10
+          done
+
+          echo "Waiting for cloud-init to complete..."
+          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "sudo cloud-init status --wait"
+
+      - name: Copy server configuration, mapcycle and custom maps
+        shell: bash
+        env:
+          PUBLIC_IP: ${{ steps.deploy.outputs.public_ip }}
+        run: |
+          SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/hl2dm_vm_key"
+
+          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "mkdir -p ~/hl2dm/hl2mp/cfg ~/hl2dm/hl2mp/maps"
+
+          scp $SSH_OPTS cfg/server.cfg "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
+          scp $SSH_OPTS cfg/mapcycle.txt "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
+          scp $SSH_OPTS -r maps/. "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/maps/"
+
+          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "sudo systemctl restart hl2dm.service"
+
+      - name: Clean up SSH key
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/hl2dm_vm_key
+
+  deprovision:
+    if: github.event.inputs.action == 'deprovision'
+    runs-on: ubuntu-latest
+    environment: production_srcds
+    steps:
+      - name: Validate required settings
+        shell: bash
+        run: |
+          test -n "${{ secrets.AZURE_CLIENT_ID }}" || { echo "::error::Set the AZURE_CLIENT_ID secret."; exit 1; }
+          test -n "${{ secrets.AZURE_TENANT_ID }}" || { echo "::error::Set the AZURE_TENANT_ID secret."; exit 1; }
+          test -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" || { echo "::error::Set the AZURE_SUBSCRIPTION_ID secret."; exit 1; }
+          test -n "${{ secrets.AZURE_RESOURCE_GROUP }}" || { echo "::error::Set the AZURE_RESOURCE_GROUP secret."; exit 1; }
+
+      - name: Authenticate to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deprovision HL2DM VM and network resources
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            VM_NAME="${{ vars.HL2DM_VM_NAME || 'hl2dm' }}"
+            RESOURCE_GROUP="${{ secrets.AZURE_RESOURCE_GROUP }}"
+
+            az vm delete \
+              --name "$VM_NAME" \
+              --resource-group "$RESOURCE_GROUP" \
+              --yes || true
+
+            az network nic delete \
+              --name "${VM_NAME}-nic" \
+              --resource-group "$RESOURCE_GROUP" || true
+
+            az network public-ip delete \
+              --name "${VM_NAME}-pip" \
+              --resource-group "$RESOURCE_GROUP" || true
+
+            az network vnet delete \
+              --name "${VM_NAME}-vnet" \
+              --resource-group "$RESOURCE_GROUP" || true
+
+            az network nsg delete \
+              --name "${VM_NAME}-nsg" \
+              --resource-group "$RESOURCE_GROUP" || true
