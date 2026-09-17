@@ -77,14 +77,32 @@ jobs:
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
               --query properties.outputs.publicIpAddress.value -o tsv)
 
-            echo "public_ip=$PUBLIC_IP" >> "$GITHUB_OUTPUT"
+            # azure/cli runs this script inside a Docker container, so writing
+            # directly to $GITHUB_OUTPUT here does not propagate back to the
+            # runner host. Persist the value to a file inside GITHUB_WORKSPACE
+            # (which is bind-mounted into the container) instead, and turn it
+            # into a real step output in the next (non-containerized) step.
+            echo "$PUBLIC_IP" > public_ip.txt
+
+      - name: Expose public IP as step output
+        id: ip
+        shell: bash
+        run: |
+          echo "public_ip=$(cat public_ip.txt)" >> "$GITHUB_OUTPUT"
+          rm -f public_ip.txt
 
       - name: Wait for SSH and cloud-init to finish
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
-          PUBLIC_IP: ${{ steps.deploy.outputs.public_ip }}
+          PUBLIC_IP: ${{ steps.ip.outputs.public_ip }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
         run: |
+          if [ -z "$PUBLIC_IP" ]; then
+            echo "::error::Public IP output was empty; the VM deployment may have failed."
+            exit 1
+          fi
+
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/hl2dm_vm_key
           chmod 600 ~/.ssh/hl2dm_vm_key
@@ -92,32 +110,40 @@ jobs:
           SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hl2dm_vm_key"
 
           echo "Waiting for SSH on $PUBLIC_IP..."
+          ssh_up=false
           for i in $(seq 1 30); do
-            if ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "echo ready" >/dev/null 2>&1; then
+            if ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "echo ready" >/dev/null 2>&1; then
               echo "SSH is up."
+              ssh_up=true
               break
             fi
             echo "Attempt $i/30 failed, retrying in 10s..."
             sleep 10
           done
 
+          if [ "$ssh_up" != true ]; then
+            echo "::error::SSH did not become available on $PUBLIC_IP after 30 attempts."
+            exit 1
+          fi
+
           echo "Waiting for cloud-init to complete..."
-          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "sudo cloud-init status --wait"
+          ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "sudo cloud-init status --wait"
 
       - name: Copy server configuration, mapcycle and custom maps
         shell: bash
         env:
-          PUBLIC_IP: ${{ steps.deploy.outputs.public_ip }}
+          PUBLIC_IP: ${{ steps.ip.outputs.public_ip }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
         run: |
           SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/hl2dm_vm_key"
 
-          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "mkdir -p ~/hl2dm/hl2mp/cfg ~/hl2dm/hl2mp/maps"
+          ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "mkdir -p ~/hl2dm/hl2mp/cfg ~/hl2dm/hl2mp/maps"
 
-          scp $SSH_OPTS cfg/server.cfg "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
-          scp $SSH_OPTS cfg/mapcycle.txt "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
-          scp $SSH_OPTS -r maps/. "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/maps/"
+          scp $SSH_OPTS cfg/server.cfg "$ADMIN_USERNAME@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
+          scp $SSH_OPTS cfg/mapcycle.txt "$ADMIN_USERNAME@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
+          scp $SSH_OPTS -r maps/. "$ADMIN_USERNAME@$PUBLIC_IP:~/hl2dm/hl2mp/maps/"
 
-          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "sudo systemctl restart hl2dm.service"
+          ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "sudo systemctl restart hl2dm.service"
 
       - name: Clean up SSH key
         if: always()
