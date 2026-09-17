@@ -44,10 +44,16 @@ jobs:
           test -n "${{ secrets.AZURE_TENANT_ID }}" || { echo "::error::Set the AZURE_TENANT_ID secret."; exit 1; }
           test -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" || { echo "::error::Set the AZURE_SUBSCRIPTION_ID secret."; exit 1; }
           test -n "${{ secrets.AZURE_RESOURCE_GROUP }}" || { echo "::error::Set the AZURE_RESOURCE_GROUP secret."; exit 1; }
-          test -n "${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}" || { echo "::error::Set the AZURE_VM_SSH_PUBLIC_KEY secret."; exit 1; }
           test -n "${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}" || { echo "::error::Set the AZURE_SSH_SOURCE_ADDRESS_PREFIX secret."; exit 1; }
-          test -n "${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}" || { echo "::error::Set the AZURE_VM_SSH_PRIVATE_KEY secret."; exit 1; }
           test -n "${{ secrets.ADMIN_USERNAME }}" || { echo "::error::Set the ADMIN_USERNAME secret."; exit 1; }
+
+      - name: Generate ephemeral SSH keypair
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keygen -t ed25519 -N "" -f ~/.ssh/hl2dm_vm_key -C "github-actions-hl2dm-vm"
+          chmod 600 ~/.ssh/hl2dm_vm_key
+          chmod 644 ~/.ssh/hl2dm_vm_key.pub
 
       - name: Authenticate to Azure
         uses: azure/login@v2
@@ -56,24 +62,13 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Determine runner public IP
-        id: runner_ip
-        shell: bash
-        run: |
-          RUNNER_IP=$(curl -s --fail https://checkip.amazonaws.com || curl -s --fail https://api.ipify.org)
-          RUNNER_IP=$(echo "$RUNNER_IP" | tr -d '[:space:]')
-          if [ -z "$RUNNER_IP" ]; then
-            echo "::error::Could not determine the runner's public IP address."
-            exit 1
-          fi
-          echo "Runner public IP: $RUNNER_IP"
-          echo "cidr=${RUNNER_IP}/32" >> "$GITHUB_OUTPUT"
-
       - name: Provision HL2DM VM
         id: deploy
         uses: azure/cli@v2
         with:
           inlineScript: |
+            SSH_PUBLIC_KEY=$(cat ~/.ssh/hl2dm_vm_key.pub)
+
             az deployment group create \
               --name "hl2dm-vm-${{ github.run_id }}" \
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
@@ -82,100 +77,55 @@ jobs:
               --parameters \
                 location="${{ vars.AZURE_LOCATION || 'southafricanorth' }}" \
                 adminUsername="${{ secrets.ADMIN_USERNAME }}" \
-                adminSshPublicKey="${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}" \
-                sshSourceAddressPrefix="${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}" \
-                runnerSourceAddressPrefix="${{ steps.runner_ip.outputs.cidr }}"
+                adminSshPublicKey="$SSH_PUBLIC_KEY" \
+                sshSourceAddressPrefix="${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}"
 
             PUBLIC_IP=$(az deployment group show \
               --name "hl2dm-vm-${{ github.run_id }}" \
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
               --query properties.outputs.publicIpAddress.value -o tsv)
 
-            # azure/cli runs this script inside a Docker container, so writing
-            # directly to $GITHUB_OUTPUT here does not propagate back to the
-            # runner host. Persist the value to a file inside GITHUB_WORKSPACE
-            # (which is bind-mounted into the container) instead, and turn it
-            # into a real step output in the next (non-containerized) step.
-            echo "$PUBLIC_IP" > public_ip.txt
-
-      - name: Expose public IP as step output
-        id: ip
-        shell: bash
-        run: |
-          echo "public_ip=$(cat public_ip.txt)" >> "$GITHUB_OUTPUT"
-          rm -f public_ip.txt
+            echo "public_ip=$PUBLIC_IP" >> "$GITHUB_OUTPUT"
 
       - name: Wait for SSH and cloud-init to finish
         shell: bash
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.AZURE_VM_SSH_PRIVATE_KEY }}
-          PUBLIC_IP: ${{ steps.ip.outputs.public_ip }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          PUBLIC_IP: ${{ steps.deploy.outputs.public_ip }}
         run: |
-          if [ -z "$PUBLIC_IP" ]; then
-            echo "::error::Public IP output was empty; the VM deployment may have failed."
-            exit 1
-          fi
-
-          mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/hl2dm_vm_key
-          chmod 600 ~/.ssh/hl2dm_vm_key
-
           SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -i ~/.ssh/hl2dm_vm_key"
 
           echo "Waiting for SSH on $PUBLIC_IP..."
-          ssh_up=false
           for i in $(seq 1 30); do
-            if ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "echo ready" >/dev/null 2>&1; then
+            if ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "echo ready" >/dev/null 2>&1; then
               echo "SSH is up."
-              ssh_up=true
               break
             fi
             echo "Attempt $i/30 failed, retrying in 10s..."
             sleep 10
           done
 
-          if [ "$ssh_up" != true ]; then
-            echo "::error::SSH did not become available on $PUBLIC_IP after 30 attempts."
-            exit 1
-          fi
-
           echo "Waiting for cloud-init to complete..."
-          ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "sudo cloud-init status --wait"
+          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "sudo cloud-init status --wait"
 
       - name: Copy server configuration, mapcycle and custom maps
         shell: bash
         env:
-          PUBLIC_IP: ${{ steps.ip.outputs.public_ip }}
-          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          PUBLIC_IP: ${{ steps.deploy.outputs.public_ip }}
         run: |
           SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/hl2dm_vm_key"
 
-          ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "mkdir -p ~/hl2dm/hl2mp/cfg ~/hl2dm/hl2mp/maps"
+          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "mkdir -p ~/hl2dm/hl2mp/cfg ~/hl2dm/hl2mp/maps"
 
-          scp $SSH_OPTS cfg/server.cfg "$ADMIN_USERNAME@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
-          scp $SSH_OPTS cfg/mapcycle.txt "$ADMIN_USERNAME@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
-          scp $SSH_OPTS -r maps/. "$ADMIN_USERNAME@$PUBLIC_IP:~/hl2dm/hl2mp/maps/"
+          scp $SSH_OPTS cfg/server.cfg "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
+          scp $SSH_OPTS cfg/mapcycle.txt "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
+          scp $SSH_OPTS -r maps/. "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/maps/"
 
-          ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "sudo systemctl restart hl2dm.service"
-
-      - name: Remove runner IP from NSG allow-ssh rule
-        if: always()
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            VM_NAME="${{ vars.HL2DM_VM_NAME || 'hl2dm' }}"
-            az network nsg rule update \
-              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-              --nsg-name "${VM_NAME}-nsg" \
-              --name allow-ssh \
-              --source-address-prefixes "${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}" \
-              --only-show-errors || echo "::warning::Could not restrict allow-ssh rule back to the admin CIDR; check the NSG manually."
+          ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "sudo systemctl restart hl2dm.service"
 
       - name: Clean up SSH key
         if: always()
         shell: bash
-        run: rm -f ~/.ssh/hl2dm_vm_key
+        run: rm -f ~/.ssh/hl2dm_vm_key ~/.ssh/hl2dm_vm_key.pub
 
   deprovision:
     if: github.event.inputs.action == 'deprovision'
