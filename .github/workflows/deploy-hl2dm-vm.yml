@@ -1,4 +1,4 @@
-name: Deploy HL2DM Standalone VM
+name: Deploy HL2DM Linux VM
 
 on:
   pull_request:
@@ -45,6 +45,7 @@ jobs:
           test -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" || { echo "::error::Set the AZURE_SUBSCRIPTION_ID secret."; exit 1; }
           test -n "${{ secrets.AZURE_RESOURCE_GROUP }}" || { echo "::error::Set the AZURE_RESOURCE_GROUP secret."; exit 1; }
           test -n "${{ secrets.ADMIN_USERNAME }}" || { echo "::error::Set the ADMIN_USERNAME secret."; exit 1; }
+          test -n "${{ secrets.RCON_PASSWORD }}" || { echo "::error::Set the RCON_PASSWORD secret."; exit 1; }
 
       - name: Determine GitHub runner public IP
         id: runner_ip
@@ -125,10 +126,13 @@ jobs:
         shell: bash
         env:
           PUBLIC_IP: ${{ steps.deploy.outputs.public_ip }}
+          RCON_PASSWORD: ${{ secrets.RCON_PASSWORD }}
         run: |
           SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/hl2dm_vm_key"
 
           ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "mkdir -p ~/hl2dm/hl2mp/cfg ~/hl2dm/hl2mp/maps"
+
+          sed -i "s|\${RCON_PASSWORD}|${RCON_PASSWORD//|/\\|}|" cfg/server.cfg
 
           scp $SSH_OPTS cfg/server.cfg "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
           scp $SSH_OPTS cfg/mapcycle.txt "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
