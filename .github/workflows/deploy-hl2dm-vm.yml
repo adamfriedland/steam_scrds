@@ -48,12 +48,19 @@ jobs:
           test -n "${{ secrets.ADMIN_USERNAME }}" || { echo "::error::Set the ADMIN_USERNAME secret."; exit 1; }
 
       - name: Generate ephemeral SSH keypair
+        id: sshkey
         shell: bash
         run: |
           mkdir -p ~/.ssh
           ssh-keygen -t ed25519 -N "" -f ~/.ssh/hl2dm_vm_key -C "github-actions-hl2dm-vm"
           chmod 600 ~/.ssh/hl2dm_vm_key
           chmod 644 ~/.ssh/hl2dm_vm_key.pub
+
+          {
+            echo "public_key<<SSH_PUBKEY_EOF"
+            cat ~/.ssh/hl2dm_vm_key.pub
+            echo "SSH_PUBKEY_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Authenticate to Azure
         uses: azure/login@v2
@@ -65,10 +72,10 @@ jobs:
       - name: Provision HL2DM VM
         id: deploy
         uses: azure/cli@v2
+        env:
+          SSH_PUBLIC_KEY: ${{ steps.sshkey.outputs.public_key }}
         with:
           inlineScript: |
-            SSH_PUBLIC_KEY=$(cat ~/.ssh/hl2dm_vm_key.pub)
-
             az deployment group create \
               --name "hl2dm-vm-${{ github.run_id }}" \
               --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
