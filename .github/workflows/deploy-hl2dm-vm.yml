@@ -56,6 +56,19 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Determine runner public IP
+        id: runner_ip
+        shell: bash
+        run: |
+          RUNNER_IP=$(curl -s --fail https://checkip.amazonaws.com || curl -s --fail https://api.ipify.org)
+          RUNNER_IP=$(echo "$RUNNER_IP" | tr -d '[:space:]')
+          if [ -z "$RUNNER_IP" ]; then
+            echo "::error::Could not determine the runner's public IP address."
+            exit 1
+          fi
+          echo "Runner public IP: $RUNNER_IP"
+          echo "cidr=${RUNNER_IP}/32" >> "$GITHUB_OUTPUT"
+
       - name: Provision HL2DM VM
         id: deploy
         uses: azure/cli@v2
@@ -70,7 +83,8 @@ jobs:
                 location="${{ vars.AZURE_LOCATION || 'southafricanorth' }}" \
                 adminUsername="${{ secrets.ADMIN_USERNAME }}" \
                 adminSshPublicKey="${{ secrets.AZURE_VM_SSH_PUBLIC_KEY }}" \
-                sshSourceAddressPrefix="${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}"
+                sshSourceAddressPrefix="${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}" \
+                runnerSourceAddressPrefix="${{ steps.runner_ip.outputs.cidr }}"
 
             PUBLIC_IP=$(az deployment group show \
               --name "hl2dm-vm-${{ github.run_id }}" \
@@ -144,6 +158,19 @@ jobs:
           scp $SSH_OPTS -r maps/. "$ADMIN_USERNAME@$PUBLIC_IP:~/hl2dm/hl2mp/maps/"
 
           ssh $SSH_OPTS "$ADMIN_USERNAME@$PUBLIC_IP" "sudo systemctl restart hl2dm.service"
+
+      - name: Remove runner IP from NSG allow-ssh rule
+        if: always()
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            VM_NAME="${{ vars.HL2DM_VM_NAME || 'hl2dm' }}"
+            az network nsg rule update \
+              --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
+              --nsg-name "${VM_NAME}-nsg" \
+              --name allow-ssh \
+              --source-address-prefixes "${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}" \
+              --only-show-errors || echo "::warning::Could not restrict allow-ssh rule back to the admin CIDR; check the NSG manually."
 
       - name: Clean up SSH key
         if: always()

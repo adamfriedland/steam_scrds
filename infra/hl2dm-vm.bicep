@@ -13,6 +13,9 @@ param adminSshPublicKey string
 @description('CIDR range allowed to connect to SSH.')
 param sshSourceAddressPrefix string
 
+@description('Additional CIDR (typically the deploying GitHub Actions runner) temporarily allowed to connect to SSH so the workflow can finish provisioning.')
+param runnerSourceAddressPrefix string = ''
+
 @description('VM size. Must be an x64 SKU since the HL2DM dedicated server binaries are x86_64-only.')
 param vmSize string = 'Standard_B2as_v2'
 
@@ -22,6 +25,7 @@ var publicIpName = '${vmName}-pip'
 var nsgName = '${vmName}-nsg'
 var nicName = '${vmName}-nic'
 var cloudInitData = replace(loadTextContent('hl2dm-cloud-init.yaml'), '__ADMIN_USERNAME__', adminUsername)
+var sshSourceAddressPrefixes = empty(runnerSourceAddressPrefix) ? [sshSourceAddressPrefix] : [sshSourceAddressPrefix, runnerSourceAddressPrefix]
 
 resource publicIp 'Microsoft.Network/publicIPAddresses@2023-09-01' = {
   name: publicIpName
@@ -47,7 +51,7 @@ resource nsg 'Microsoft.Network/networkSecurityGroups@2023-09-01' = {
           direction: 'Inbound'
           protocol: 'Tcp'
           sourcePortRange: '*'
-          sourceAddressPrefix: sshSourceAddressPrefix
+          sourceAddressPrefixes: sshSourceAddressPrefixes
           destinationPortRange: '22'
           destinationAddressPrefix: '*'
         }
@@ -171,6 +175,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
       }
       osDisk: {
         createOption: 'FromImage'
+        deleteOption: 'Delete'
         managedDisk: {
           storageAccountType: 'StandardSSD_LRS'
         }
