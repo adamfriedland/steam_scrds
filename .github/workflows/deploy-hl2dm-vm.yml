@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ~/.ssh
-          ssh-keygen -t ed25519 -N "" -f ~/.ssh/hl2dm_vm_key -C "github-actions-hl2dm-vm"
+          ssh-keygen -t ed25519 -N "" -f ~/.ssh/hl2dm_vm_key -C "${{ secrets.ADMIN_USERNAME }}"
           chmod 600 ~/.ssh/hl2dm_vm_key
           chmod 644 ~/.ssh/hl2dm_vm_key.pub
 
