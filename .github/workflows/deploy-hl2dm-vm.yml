@@ -44,8 +44,15 @@ jobs:
           test -n "${{ secrets.AZURE_TENANT_ID }}" || { echo "::error::Set the AZURE_TENANT_ID secret."; exit 1; }
           test -n "${{ secrets.AZURE_SUBSCRIPTION_ID }}" || { echo "::error::Set the AZURE_SUBSCRIPTION_ID secret."; exit 1; }
           test -n "${{ secrets.AZURE_RESOURCE_GROUP }}" || { echo "::error::Set the AZURE_RESOURCE_GROUP secret."; exit 1; }
-          test -n "${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}" || { echo "::error::Set the AZURE_SSH_SOURCE_ADDRESS_PREFIX secret."; exit 1; }
           test -n "${{ secrets.ADMIN_USERNAME }}" || { echo "::error::Set the ADMIN_USERNAME secret."; exit 1; }
+
+      - name: Determine GitHub runner public IP
+        id: runner_ip
+        shell: bash
+        run: |
+          RUNNER_IP=$(curl -s https://checkip.amazonaws.com)
+          test -n "$RUNNER_IP" || { echo "::error::Failed to determine runner public IP."; exit 1; }
+          echo "cidr=${RUNNER_IP}/32" >> "$GITHUB_OUTPUT"
 
       - name: Generate ephemeral SSH keypair
         id: sshkey
@@ -85,7 +92,7 @@ jobs:
                 location="${{ vars.AZURE_LOCATION || 'southafricanorth' }}" \
                 adminUsername="${{ secrets.ADMIN_USERNAME }}" \
                 adminSshPublicKey="$SSH_PUBLIC_KEY" \
-                sshSourceAddressPrefix="${{ secrets.AZURE_SSH_SOURCE_ADDRESS_PREFIX }}"
+                sshSourceAddressPrefix="${{ steps.runner_ip.outputs.cidr }}"
 
             PUBLIC_IP=$(az deployment group show \
               --name "hl2dm-vm-${{ github.run_id }}" \
