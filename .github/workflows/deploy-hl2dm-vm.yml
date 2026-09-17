@@ -132,7 +132,7 @@ jobs:
 
           ssh $SSH_OPTS "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP" "mkdir -p ~/hl2dm/hl2mp/cfg ~/hl2dm/hl2mp/maps"
 
-          sed -i "s|\${RCON_PASSWORD}|${RCON_PASSWORD//|/\\|}|" cfg/server.cfg
+          RCON_PASSWORD="$RCON_PASSWORD" perl -pi -e 's/\$\{RCON_PASSWORD\}/$ENV{RCON_PASSWORD}/g' cfg/server.cfg
 
           scp $SSH_OPTS cfg/server.cfg "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
           scp $SSH_OPTS cfg/mapcycle.txt "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
