@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: steam-scrds
+  labels:
+    app: steam-scrds
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: steam-scrds
+  template:
+    metadata:
+      labels:
+        app: steam-scrds
+    spec:
+      containers:
+        - name: steam-scrds
+          image: ${ACR_LOGIN_SERVER}/steam-scrds:latest
+          imagePullPolicy: Always
+          ports:
+            - name: game-tcp
+              containerPort: 27015
+              protocol: TCP
+            - name: game-udp
+              containerPort: 27015
+              protocol: UDP
+            - name: steam-query
+              containerPort: 27005
+              protocol: UDP
+            - name: steam-networking
+              containerPort: 27020
+              protocol: UDP
+          resources:
+            requests:
+              cpu: 1
+              memory: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: steam-scrds
+  labels:
+    app: steam-scrds
+spec:
+  type: LoadBalancer
+  selector:
+    app: steam-scrds
+  ports:
+    - name: game-tcp
+      port: 27015
+      targetPort: game-tcp
+      protocol: TCP
+    - name: game-udp
+      port: 27015
+      targetPort: game-udp
+      protocol: UDP
+    - name: steam-query
+      port: 27005
+      targetPort: steam-query
+      protocol: UDP
+    - name: steam-networking
+      port: 27020
+      targetPort: steam-networking
+      protocol: UDP
