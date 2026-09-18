@@ -63,6 +63,8 @@ RUN test -n "$RCON_PASSWORD" && \
     esac && \
     sed -i "s/\${RCON_PASSWORD}/$RCON_PASSWORD/g" /home/steam/hl2dm/hl2mp/cfg/server.cfg
 
+COPY cfg/banned_user.cfg /home/steam/hl2dm/hl2mp/cfg/banned_user.cfg
+
 COPY cfg/mapcycle.txt /home/steam/hl2dm/hl2mp/mapcycle.txt
 
 COPY maps/ /home/steam/hl2dm/hl2mp/maps/

@@ -10,6 +10,7 @@ on:
       - 'infra/hl2dm-vm.bicepparam'
       - 'infra/hl2dm-cloud-init.yaml'
       - 'infra/cloud-init.yaml'
+      - 'cfg/**'
   workflow_dispatch:
     inputs:
       action:
@@ -135,6 +136,7 @@ jobs:
           perl -pi -e 's/\$\{RCON_PASSWORD\}/$ENV{RCON_PASSWORD}/g' cfg/server.cfg
 
           scp $SSH_OPTS cfg/server.cfg "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/server.cfg"
+          scp $SSH_OPTS cfg/banned_user.cfg "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/cfg/banned_user.cfg"
           scp $SSH_OPTS cfg/mapcycle.txt "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/mapcycle.txt"
           scp $SSH_OPTS -r maps/. "${{ secrets.ADMIN_USERNAME }}@$PUBLIC_IP:~/hl2dm/hl2mp/maps/"
 
